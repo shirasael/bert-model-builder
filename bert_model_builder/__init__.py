@@ -1,1 +1,1 @@
-from classification_model import BertClassificationModel
+from .classification_model import BertClassificationModel, split_train_test

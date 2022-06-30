@@ -10,8 +10,9 @@ from bert_model_builder.performance_analysis import b_metrics
 
 class BertClassificationModel:
 
-    def __init__(self, classes_mapped, cpu=False):
+    def __init__(self, classes_mapped, gpu=False):
         self.classes_mapped = classes_mapped
+        self._reverse_classes_mapping = {val: key for key, val in self.classes_mapped.items()}
         self.tokenizer = BertTokenizer.from_pretrained(
             'bert-base-uncased',
             do_lower_case=True
@@ -22,12 +23,12 @@ class BertClassificationModel:
             output_attentions=False,
             output_hidden_states=False,
         )
-        if cpu:
+        if gpu:
             self.model.cuda()
         # Recommended learning rates (Adam): 5e-5, 3e-5, 2e-5. See: https://arxiv.org/pdf/1810.04805.pdf
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=5e-5, eps=1e-08)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.trained = False
+        self._trained = False
 
     def train(self, train_set, batch_size=16, epochs=2):
         """
@@ -61,10 +62,10 @@ class BertClassificationModel:
                 nb_tr_steps += 1
 
             print('\n\t - Train loss: {:.4f}'.format(tr_loss / nb_tr_steps))
-        self.trained = True
+        self._trained = True
 
     def test(self, test_set, batch_size=16):
-        if not self.trained:
+        if not self._trained:
             raise Exception("Model must be trained first!")
         """
         :param batch_size: Recommended batch size: 16, 32. See: https://arxiv.org/pdf/1810.04805.pdf
@@ -108,7 +109,7 @@ class BertClassificationModel:
             val_specificity) > 0 else '\t - Validation Specificity: NaN')
 
     def predict(self, input_txt):
-        if not self.trained:
+        if not self._trained:
             raise Exception("Model must be trained first!")
 
         self.model.eval()
@@ -131,16 +132,16 @@ class BertClassificationModel:
             output = self.model(test_ids.to(self.device), token_type_ids=None,
                                 attention_mask=test_attention_mask.to(self.device))
 
-        return self.classes_mapped[np.argmax(output.logits.cpu().numpy()).flatten().item()]
+        return self._reverse_classes_mapping[np.argmax(output.logits.cpu().numpy()).flatten().item()]
 
     def save(self, path):
-        if not self.trained:
+        if not self._trained:
             raise Exception("Model must be trained first!")
         torch.save(self.model, path)
 
     def load(self, path):
         self.model = torch.load(path)
-        self.trained = True
+        self._trained = True
 
 
 def split_train_test(text, labels, tokenizer, test_ratio=0.2):

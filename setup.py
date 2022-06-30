@@ -1,7 +1,7 @@
 from setuptools import setup
 import os
 
-with open(os.path.join('.', 'requirements.txt'), 'rb') as f:
+with open('requirements.txt', 'rb') as f:
     requirements = f.read().splitlines()
 
 
