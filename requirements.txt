@@ -3,4 +3,4 @@ torch
 numpy~=1.23.0
 transformers~=4.20.1
 scikit-learn~=1.1.1
-tqdm~=4.64.0import torch
+tqdm~=4.64.0
