@@ -1,7 +1,6 @@
 from setuptools import setup
-import os
 
-with open('requirements.txt', 'rb') as f:
+with open('requirements.txt', 'r') as f:
     requirements = f.read().splitlines()
 
 
@@ -11,5 +10,5 @@ setup(
     author="Shira Asa-El",
     description="Credit: https://towardsdatascience.com/fine-tuning-bert-for-text-classification-54e7df642894",
     packages=['bert_model_builder'],
-    install_requires=requirements
+    install_requires=[str(r) for r in requirements]
 )
