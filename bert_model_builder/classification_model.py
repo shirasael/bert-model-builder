@@ -6,13 +6,11 @@ import numpy as np
 from tqdm import trange
 
 from bert_model_builder.performance_analysis import b_metrics
-from bert_model_builder.text_processing import preprocessing
 
 
 class BertClassificationModel:
 
-    def __init__(self, text, labels, classes_mapped, cpu=False):
-        self.text = text
+    def __init__(self, classes_mapped, cpu=False):
         self.classes_mapped = classes_mapped
         self.tokenizer = BertTokenizer.from_pretrained(
             'bert-base-uncased',
@@ -29,38 +27,7 @@ class BertClassificationModel:
         # Recommended learning rates (Adam): 5e-5, 3e-5, 2e-5. See: https://arxiv.org/pdf/1810.04805.pdf
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=5e-5, eps=1e-08)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-        token_id = []
-        attention_masks = []
-
-        for sample in text:
-            encoding_dict = preprocessing(sample, self.tokenizer)
-            token_id.append(encoding_dict['input_ids'])
-            attention_masks.append(encoding_dict['attention_mask'])
-
-        self.token_id = torch.cat(token_id, dim=0)
-        self.attention_masks = torch.cat(attention_masks, dim=0)
-        self.labels = torch.tensor(labels)
         self.trained = False
-
-    def split_train_test(self, test_ratio=0.2):
-        """
-        Split a given labeled dataset to train and test groups.
-        :param test_ratio: % of data that will be used in test (1-test_ratio will be used for train)
-        :return: tuple(train_set, test_set)
-        """
-        # Indices of the train and validation splits stratified by labels
-        train_idx, val_idx = train_test_split(
-            np.arange(len(self.labels)),
-            test_size=test_ratio,
-            shuffle=True,
-            stratify=self.labels)
-
-        # Train and validation sets
-        train_set = TensorDataset(self.token_id[train_idx], self.attention_masks[train_idx], self.labels[train_idx])
-        test_set = TensorDataset(self.token_id[val_idx], self.attention_masks[val_idx], self.labels[val_idx])
-
-        return train_set, test_set
 
     def train(self, train_set, batch_size=16, epochs=2):
         """
@@ -94,9 +61,11 @@ class BertClassificationModel:
                 nb_tr_steps += 1
 
             print('\n\t - Train loss: {:.4f}'.format(tr_loss / nb_tr_steps))
-            self.trained = True
+        self.trained = True
 
     def test(self, test_set, batch_size=16):
+        if not self.trained:
+            raise Exception("Model must be trained first!")
         """
         :param batch_size: Recommended batch size: 16, 32. See: https://arxiv.org/pdf/1810.04805.pdf
         """
@@ -142,6 +111,8 @@ class BertClassificationModel:
         if not self.trained:
             raise Exception("Model must be trained first!")
 
+        self.model.eval()
+
         # We need Token IDs and Attention Mask for inference on the new sentence
         test_ids = []
         test_attention_mask = []
@@ -161,3 +132,60 @@ class BertClassificationModel:
                                 attention_mask=test_attention_mask.to(self.device))
 
         return self.classes_mapped[np.argmax(output.logits.cpu().numpy()).flatten().item()]
+
+    def save(self, path):
+        if not self.trained:
+            raise Exception("Model must be trained first!")
+        torch.save(self.model, path)
+
+    def load(self, path):
+        self.model = torch.load(path)
+        self.trained = True
+
+
+def split_train_test(text, labels, tokenizer, test_ratio=0.2):
+    """
+    Split a given labeled dataset to train and test groups.
+    :param test_ratio: % of data that will be used in test (1-test_ratio will be used for train)
+    :return: tuple(train_set, test_set)
+    """
+    token_id = []
+    attention_masks = []
+
+    for sample in text:
+        encoding_dict = preprocessing(sample, tokenizer)
+        token_id.append(encoding_dict['input_ids'])
+        attention_masks.append(encoding_dict['attention_mask'])
+
+    token_id = torch.cat(token_id, dim=0)
+    attention_masks = torch.cat(attention_masks, dim=0)
+    labels = torch.tensor(labels)
+
+    # Indices of the train and validation splits stratified by labels
+    train_idx, val_idx = train_test_split(
+        np.arange(len(labels)),
+        test_size=test_ratio,
+        shuffle=True,
+        stratify=labels)
+
+    # Train and validation sets
+    train_set = TensorDataset(token_id[train_idx], attention_masks[train_idx], labels[train_idx])
+    test_set = TensorDataset(token_id[val_idx], attention_masks[val_idx], labels[val_idx])
+
+    return train_set, test_set
+
+
+def preprocessing(input_text, tokenizer):
+    '''
+    Returns <class transformers.tokenization_utils_base.BatchEncoding> with the following fields:
+      - input_ids: list of token ids
+      - token_type_ids: list of token type ids
+      - attention_mask: list of indices (0,1) specifying which tokens should considered by the model (return_attention_mask = True).
+    '''
+    return tokenizer.encode_plus(
+        input_text,
+        add_special_tokens=True,
+        max_length=32,
+        pad_to_max_length=True,
+        return_attention_mask=True,
+        return_tensors='pt')
