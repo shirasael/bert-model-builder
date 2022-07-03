@@ -10,7 +10,7 @@ from bert_model_builder.performance_analysis import b_metrics
 
 class BertClassificationModel:
 
-    def __init__(self, classes_mapped, gpu=False):
+    def __init__(self, classes_mapped):
         self.classes_mapped = classes_mapped
         self._reverse_classes_mapping = {val: key for key, val in self.classes_mapped.items()}
         self.tokenizer = BertTokenizer.from_pretrained(
@@ -23,11 +23,13 @@ class BertClassificationModel:
             output_attentions=False,
             output_hidden_states=False,
         )
-        if gpu:
+        if torch.cuda.is_available():
             self.model.cuda()
+            self.device = torch.device('cuda')
+        else:
+            self.device = torch.device('cpu')
         # Recommended learning rates (Adam): 5e-5, 3e-5, 2e-5. See: https://arxiv.org/pdf/1810.04805.pdf
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=5e-5, eps=1e-08)
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._trained = False
 
     def train(self, train_set, batch_size=16, epochs=2):
