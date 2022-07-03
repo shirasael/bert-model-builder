@@ -24,6 +24,7 @@ class BertClassificationModel:
             output_hidden_states=False,
         )
         if torch.cuda.is_available():
+            print("Using GPU")
             self.model.cuda()
             self.device = torch.device('cuda')
         else:
