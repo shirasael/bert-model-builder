@@ -12,7 +12,7 @@ labels = df.Tag.values
 
 
 def test_train():
-    model = BertClassificationModel(TEST_CLASSES)
+    model = BertClassificationModel(TEST_CLASSES, gpu=True)
     train_set, test_set = split_train_test(text, labels, model.tokenizer, test_ratio=0.2)
     model.train(train_set)
     model.test(test_set)
